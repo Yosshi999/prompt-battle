@@ -4,8 +4,13 @@
 <h2>Submission ID: {{ job_id }}</h2>
 {% if error %}<p class="err">{{ error }}</p>
 {% else %}
-  <h3>Attacker: {{ submission.attack_user_name }}</h3>
-  <h3>Target: {{ submission.defense_user_name }}</h3>
+  <span>Kind: {{ submission.kind }}</span><br/>
+  <span>Attacker: {{ submission.attack_user_name }}</span><br/>
+  <span>Target: {{ submission.defense_user_name }}</span><br/>
+  <span>Status: {{ submission.status }}</span><br/>
+  <span>Created at: {{ submission.created_at }}</span><br/>
+  <span>Worker fetched at: {{ submission.evaluation_started_at }}</span><br/>
+  <span>Evaluated at: {{ submission.evaluation_finished_at }}</span><br/>
 
   <h3>System Prompt (Defense)</h3>
   <pre>[SECRET_FLAG]
