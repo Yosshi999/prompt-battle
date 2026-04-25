@@ -267,6 +267,20 @@ def defense_test(request: Request, attack_prompt: str = Form(default=""), defens
                 },
             )
 
+        # rate limit
+        if latest_job and latest_job["created_at"] > utcnow_iso(negative_seconds=60):
+            return templates.TemplateResponse(
+                request=request,
+                name="defense_test.html",
+                context={
+                    "user": user,
+                    "phase": phase,
+                    "last_defense_prompt": defense_prompt,
+                    "last_attack_prompt": attack_prompt,
+                    "error": f"Rate Limit (1 min).",
+                },
+            )
+
         job_id = enqueue_llm_job(
             conn,
             phase_id=phase["id"],
@@ -367,6 +381,19 @@ def attack_submit(
                     "targets": targets,
                     "last_attack_prompt": attack_prompt,
                     "error": f"You have a pending/running job (ID: {latest_job['id']}). Please wait for it to finish before submitting a new attack.",
+                },
+            )
+        # rate limit
+        if latest_job and latest_job["created_at"] > utcnow_iso(negative_seconds=60):
+            return templates.TemplateResponse(
+                request=request,
+                name="attack.html",
+                context={
+                    "user": user,
+                    "phase": phase,
+                    "targets": targets,
+                    "last_attack_prompt": attack_prompt,
+                    "error": f"Rate Limit (1 min).",
                 },
             )
 

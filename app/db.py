@@ -2,15 +2,15 @@ import os
 import sqlite3
 from typing import Literal
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from secrets import token_urlsafe
 
 DB_PATH = os.getenv("CTF_DB_PATH", "ctf.db")
 
 
-def utcnow_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+def utcnow_iso(negative_seconds: int = 0) -> str:
+    return (datetime.now(timezone.utc) - timedelta(seconds=negative_seconds)).isoformat()
 
 
 def hash_password(raw: str) -> str:
