@@ -1,7 +1,10 @@
+from pathlib import Path
 import time
+import os
 import traceback
 import logging
 from datetime import datetime, timedelta, timezone
+from groq import Groq
 
 from .db import (
     claim_next_pending_job,
@@ -9,6 +12,13 @@ from .db import (
     failure_job,
 )
 
+envfile = Path(__file__).parent.parent / ".env"
+if envfile.exists():
+    envdata = envfile.read_text()
+    for line in envdata.splitlines():
+        if line.strip() and not line.startswith("#"):
+            key, value = line.split("=", 1)
+            os.environ[key.strip()] = value.strip()
 
 class ISOTimeFormatter(logging.Formatter):
     def formatTime(self, record: logging.LogRecord, datefmt=None):
@@ -21,19 +31,29 @@ class ISOTimeFormatter(logging.Formatter):
 
 logger = logging.getLogger()
 fmt = ISOTimeFormatter("[%(asctime)s] %(message)s")
-
 sh = logging.StreamHandler()
 sh.setFormatter(fmt)
 logger.addHandler(sh)
-
 logger.setLevel(logging.INFO)
+
+assert os.getenv("GROQ_API_KEY"), "GROQ_API_KEY is not set in environment variables"
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def process_job(job):
     attack_prompt = job["attack_prompt"]
     full_defense_prompt = job["full_defense_prompt"]
 
-    result = "echo: " + full_defense_prompt + " " + attack_prompt
+    completion = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": full_defense_prompt},
+            {"role": "user", "content": attack_prompt}
+        ],
+        max_completion_tokens=1000,
+    )
+    logger.info(completion)
+    result = completion.choices[0].message.content.strip()
     complete_job(job["id"], result)
 
 
