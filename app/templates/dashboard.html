@@ -12,6 +12,8 @@
     <p><a href="/defense/edit">Defenseプロンプト編集へ</a></p>
   {% elif phase.state == 'attack' %}
     <p><a href="/attack">Attack画面へ</a></p>
+  {% elif phase.state == 'frozen' %}
+    <p>現在フェーズは停止中です。プロンプトの編集や新規提出はできません。</p>
   {% endif %}
 {% else %}
   <p>現在進行中のフェーズはありません。</p>

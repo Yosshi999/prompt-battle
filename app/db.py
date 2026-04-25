@@ -203,9 +203,9 @@ def ensure_seed_users() -> None:
 
 
 def get_current_phase(conn: sqlite3.Connection):
-    """Get the current active phase (defense or attack)."""
+    """Get the current active phase (defense, attack, or frozen)."""
     return conn.execute(
-        "SELECT * FROM phases WHERE state IN ('defense', 'attack') ORDER BY id DESC LIMIT 1"
+        "SELECT * FROM phases WHERE state IN ('defense', 'attack', 'frozen') ORDER BY id DESC LIMIT 1"
     ).fetchone()
 
 def get_latest_phase(conn: sqlite3.Connection):

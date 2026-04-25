@@ -441,7 +441,7 @@ def review_page(request: Request):
         ## Defense phase
         - Admin: can see all information of test queries (defense prompts, attack prompts, results)
         - User: can see only their own test queries (defense prompts, attack prompts, results)
-        ## Attack phase
+        ## Attack/Frozen phase
         - Admin: can see all information of attack queries (defense prompts, attack prompts, results)
         - User: can see their own attack queries (attack prompts, results)
         ## Closed phase
@@ -470,10 +470,11 @@ def review_page(request: Request):
                 JOIN users du ON du.id = a.defense_user_id
                 WHERE ( p.state = 'defense' AND a.kind = 'test' AND a.attack_user_id = ? )
                     OR ( p.state = 'attack' AND a.kind = 'attack' AND a.attack_user_id = ? )
+                    OR ( p.state = 'frozen' AND a.kind = 'attack' AND a.attack_user_id = ? )
                     OR ( p.state = 'closed' AND a.kind = 'attack' )
                 ORDER BY a.id
                 """,
-                (user["id"], user["id"]),
+                (user["id"], user["id"], user["id"]),
             ).fetchall()
 
     return templates.TemplateResponse(
@@ -498,7 +499,7 @@ def review_page(request: Request, job_id: int):
         ## Defense phase
         - Admin: can see all information of test queries (defense prompts, attack prompts, results)
         - User: can see only their own test queries (defense prompts, attack prompts, results)
-        ## Attack phase
+        ## Attack/Frozen phase
         - Admin: can see all information of attack queries (defense prompts, attack prompts, results)
         - User: can see their own attack queries (attack prompts, results)
         ## Closed phase
@@ -539,6 +540,11 @@ def review_page(request: Request, job_id: int):
             if submission["kind"] == "attack" and submission["attack_user_id"] == user["id"]:
                 pass_check = True
                 # Hide defense prompt for attack phase users
+                submission["defense_prompt"] = "[Hidden until the phase is closed]"
+        elif submission["state"] == "frozen":
+            if submission["kind"] == "attack" and submission["attack_user_id"] == user["id"]:
+                pass_check = True
+                # Hide defense prompt for frozen phase users
                 submission["defense_prompt"] = "[Hidden until the phase is closed]"
         elif submission["state"] == "closed":
             if submission["kind"] == "attack":
@@ -609,6 +615,23 @@ def admin_to_attack(request: Request):
 
     return RedirectResponse("/admin", status_code=303)
 
+@app.post("/admin/phase/freeze")
+def admin_freeze_phase(request: Request):
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    if not user["is_admin"]:
+        return RedirectResponse("/dashboard", status_code=303)
+
+    with get_conn() as conn:
+        phase = get_current_phase(conn)
+        if phase:
+            conn.execute(
+                "UPDATE phases SET state = 'frozen', ended_at = ? WHERE id = ?",
+                (utcnow_iso(), phase["id"]),
+            )
+
+    return RedirectResponse("/admin", status_code=303)
 
 @app.post("/admin/phase/close")
 def admin_close_phase(request: Request):
@@ -622,8 +645,8 @@ def admin_close_phase(request: Request):
         phase = get_current_phase(conn)
         if phase:
             conn.execute(
-                "UPDATE phases SET state = 'closed', ended_at = ? WHERE id = ?",
-                (utcnow_iso(), phase["id"]),
+                "UPDATE phases SET state = 'closed' WHERE id = ?",
+                (phase["id"],),
             )
 
     return RedirectResponse("/admin", status_code=303)
