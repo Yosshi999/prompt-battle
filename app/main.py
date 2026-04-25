@@ -22,7 +22,6 @@ from .db import (
     enqueue_llm_job,
     utcnow_iso,
 )
-from .llm import run_chat
 
 MAX_PROMPT = int(os.getenv("MAX_PROMPT", "1000"))
 
@@ -357,6 +356,20 @@ def attack_submit(
                 },
             )
 
+        latest_job = get_owner_latest_job(conn, phase["id"], "attack", user["id"])
+        if latest_job and latest_job["status"] in ("pending", "running"):
+            return templates.TemplateResponse(
+                request=request,
+                name="attack.html",
+                context={
+                    "user": user,
+                    "phase": phase,
+                    "targets": targets,
+                    "last_attack_prompt": attack_prompt,
+                    "error": f"You have a pending/running job (ID: {latest_job['id']}). Please wait for it to finish before submitting a new attack.",
+                },
+            )
+
         defense_prompt = get_owner_defense_prompt(conn, phase["id"], target_user_id)
         job_id = enqueue_llm_job(
             conn,
@@ -460,6 +473,8 @@ def review_page(request: Request, job_id: int):
         ## Closed phase
         - Admin: can see all information of test & attack queries (defense prompts, attack prompts, results)
         - User: can see all information of attack queries (defense prompts, attack prompts, results)
+        ## Error submission
+        Only admin can see error details.
         """
         submission = conn.execute(
             """
@@ -467,7 +482,7 @@ def review_page(request: Request, job_id: int):
                    a.attack_user_id, a.defense_user_id,
                    au.username AS attack_user_name, du.username AS defense_user_name,
                    a.defense_prompt, a.attack_prompt,
-                   a.result, a.error, a.status
+                   a.result, a.error, a.error_details, a.status
             FROM llm_jobs a
             JOIN phases p ON p.id = a.phase_id
             JOIN users au ON au.id = a.attack_user_id
@@ -484,6 +499,7 @@ def review_page(request: Request, job_id: int):
         )
     submission = dict(submission)
     if not user["is_admin"]:
+        del submission["error_details"]  # Hide error details for non-admins
         pass_check = False
         if submission["state"] == "defense":
             if submission["kind"] == "test" and submission["attack_user_id"] == user["id"]:

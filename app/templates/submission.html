@@ -22,6 +22,9 @@ ${FLAG}
   {% endif %}
   {% if submission.status == 'error' %}
     <pre>{{ submission.error }}</pre>
+    {% if submission.error_details %}
+      <pre>{{ submission.error_details }}</pre>
+    {% endif %}
   {% endif %}
 {% endif %}
 {% endblock %}

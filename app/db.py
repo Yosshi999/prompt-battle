@@ -80,6 +80,7 @@ def init_db() -> None:
                 status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'done', 'error')),
                 result TEXT,
                 error TEXT,
+                error_details TEXT,
                 created_at TEXT NOT NULL,
                 evaluation_started_at TEXT,
                 evaluation_finished_at TEXT,
@@ -122,6 +123,46 @@ def enqueue_llm_job(
     last_id = cursor.lastrowid
     conn.commit()
     return last_id
+
+def claim_next_pending_job() -> sqlite3.Row | None:
+    with get_conn() as conn:
+        job = conn.execute(
+            """
+            SELECT * FROM llm_jobs
+            WHERE status = 'pending'
+            ORDER BY created_at ASC
+            LIMIT 1
+            """
+        ).fetchone()
+        if job:
+            conn.execute(
+                "UPDATE llm_jobs SET status = 'running', evaluation_started_at = ? WHERE id = ?",
+                (utcnow_iso(), job["id"]),
+            )
+    return job
+
+def complete_job(job_id: int, message: str) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE llm_jobs
+            SET status = 'done', result = ?, evaluation_finished_at = ?
+            WHERE id = ?
+            """,
+            (message, utcnow_iso(), job_id),
+        )
+
+def failure_job(job_id: int, error_message: str, error_details: str) -> None:
+    # Only admin can see error_details.
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE llm_jobs
+            SET status = 'error', error = ?, error_details = ?, evaluation_finished_at = ?
+            WHERE id = ?
+            """,
+            (error_message, error_details, utcnow_iso(), job_id),
+        )
 
 def get_owner_latest_job(conn: sqlite3.Connection, phase_id: int, kind: Literal["test", "attack"], attack_user_id: int):
     return conn.execute(
