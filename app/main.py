@@ -448,7 +448,7 @@ def review_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="review.html",
-        context={"user": user, "phase": phase, "submissions": submissions},
+        context={"user": user, "phase": phase, "submissions": submissions[::-1]},
     )
 
 

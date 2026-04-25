@@ -10,7 +10,13 @@
     <td>{{ a.round_no }}/{{ a.kind }}</td>
     <td>{{ a.attack_user_name }}</td>
     <td>{{ a.defense_user_name }}</td>
-    <td>{{ a.status }}</td>
+    {% if a.status == 'done' %}
+      <td class="ok">{{ a.status }}</td>
+    {% elif a.status == 'error' %}
+      <td class="err">{{ a.status }}</td>
+    {% else %}
+      <td>{{ a.status }}</td>
+    {% endif %}
   </tr>
   {% endfor %}
 </table>
