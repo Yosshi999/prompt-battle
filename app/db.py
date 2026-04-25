@@ -10,7 +10,7 @@ from .loadenv import load_env
 load_env()
 
 DB_PATH = os.getenv("CTF_DB_PATH", "ctf.db")
-
+USERS = os.getenv("USERS", "user1,user2,user3").split(",")  # For seeding users
 
 def utcnow_iso(negative_seconds: int = 0) -> str:
     return (datetime.now(timezone.utc) - timedelta(seconds=negative_seconds)).isoformat()
@@ -180,9 +180,9 @@ def get_owner_latest_job(conn: sqlite3.Connection, phase_id: int, kind: Literal[
 def ensure_seed_users() -> None:
     # Demo fixed users/passwords: user01..user10 / pass01..pass10 and admin/adminpass
     with get_conn() as conn:
-        for i in range(1, 11):
-            username = f"user{i:02d}"
-            password = f"pass{i:02d}"
+        for i, user in enumerate(USERS):
+            username = user.strip()
+            password = f"pass{i+1:02d}"
             conn.execute(
                 """
                 INSERT OR IGNORE INTO users (username, password_hash, is_admin)
