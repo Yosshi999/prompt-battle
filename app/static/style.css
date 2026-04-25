@@ -7,3 +7,4 @@ pre { white-space: pre-wrap; background: #f6f6f6; padding: .5rem; }
 .err { color: #c00; }
 .ok { color: #0c0; }
 .disabled { color: #999; pointer-events: none; cursor: not-allowed; }
+.username { font-weight: bold; color: green; }

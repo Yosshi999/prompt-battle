@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from typing import Literal
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -67,32 +68,70 @@ def init_db() -> None:
                 FOREIGN KEY (owner_user_id) REFERENCES users(id)
             );
 
-            CREATE TABLE IF NOT EXISTS attacks (
+            CREATE TABLE IF NOT EXISTS llm_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 phase_id INTEGER NOT NULL,
-                attacker_user_id INTEGER NOT NULL,
-                target_user_id INTEGER NOT NULL,
-                user_prompt TEXT NOT NULL,
-                response_text TEXT NOT NULL,
-                created_at TEXT,
+                kind TEXT NOT NULL CHECK(kind IN ('test', 'attack')),
+                defense_user_id INTEGER NOT NULL,
+                attack_user_id INTEGER NOT NULL,
+                defense_prompt TEXT,
+                full_defense_prompt TEXT NOT NULL,
+                attack_prompt TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'done', 'error')),
+                result TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                evaluation_started_at TEXT,
+                evaluation_finished_at TEXT,
                 FOREIGN KEY (phase_id) REFERENCES phases(id),
-                FOREIGN KEY (attacker_user_id) REFERENCES users(id),
-                FOREIGN KEY (target_user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE IF NOT EXISTS defense_tests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                phase_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                user_prompt TEXT NOT NULL,
-                response_text TEXT NOT NULL,
-                created_at TEXT,
-                FOREIGN KEY (phase_id) REFERENCES phases(id),
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                FOREIGN KEY (defense_user_id) REFERENCES users(id),
+                FOREIGN KEY (attack_user_id) REFERENCES users(id)
             );
             """
         )
 
+def enqueue_llm_job(
+    conn: sqlite3.Connection,
+    phase_id: int,
+    kind: Literal["test", "attack"],
+    defense_user_id: int,
+    attack_user_id: int,
+    defense_prompt: str,
+    attack_prompt: str,
+) -> int:
+    assert kind in ("test", "attack")
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO llm_jobs
+        (phase_id, kind, defense_user_id, attack_user_id, defense_prompt, full_defense_prompt, attack_prompt, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        """,
+        (
+            phase_id,
+            kind,
+            defense_user_id,
+            attack_user_id,
+            defense_prompt,
+            _render_full_system_prompt(conn, phase_id, defense_user_id),
+            attack_prompt,
+            utcnow_iso(),
+        ),
+    )
+    last_id = cursor.lastrowid
+    conn.commit()
+    return last_id
+
+def get_owner_latest_job(conn: sqlite3.Connection, phase_id: int, kind: Literal["test", "attack"], attack_user_id: int):
+    return conn.execute(
+        """
+        SELECT * FROM llm_jobs
+        WHERE phase_id = ? AND kind = ? AND attack_user_id = ? 
+        ORDER BY id DESC LIMIT 1
+        """,
+        (phase_id, kind, attack_user_id),
+    ).fetchone()
 
 def ensure_seed_users() -> None:
     # Demo fixed users/passwords: user01..user10 / pass01..pass10 and admin/adminpass
@@ -120,10 +159,16 @@ def ensure_seed_users() -> None:
 
 
 def get_current_phase(conn: sqlite3.Connection):
+    """Get the current active phase (defense or attack)."""
     return conn.execute(
         "SELECT * FROM phases WHERE state IN ('defense', 'attack') ORDER BY id DESC LIMIT 1"
     ).fetchone()
 
+def get_latest_phase(conn: sqlite3.Connection):
+    """Get the latest phase regardless of state."""
+    return conn.execute(
+        "SELECT * FROM phases ORDER BY id DESC LIMIT 1"
+    ).fetchone()
 
 def create_phase(round_no: int) -> int:
     with get_conn() as conn:
@@ -149,24 +194,33 @@ def create_phase(round_no: int) -> int:
             )
         return phase_id
 
-
-def render_full_system_prompt(conn: sqlite3.Connection, phase_id: int, owner_user_id: int) -> str:
+def render_prefix_system_prompt(conn: sqlite3.Connection, phase_id: int, owner_user_id: int) -> str:
     f = conn.execute(
         "SELECT flag_value FROM flags WHERE phase_id = ? AND owner_user_id = ?",
         (phase_id, owner_user_id),
     ).fetchone()
-    s = conn.execute(
-        "SELECT prompt_body FROM system_prompts WHERE phase_id = ? AND owner_user_id = ?",
-        (phase_id, owner_user_id),
-    ).fetchone()
-
     flag_prefix = (
         "[SECRET_FLAG]\n"
         f"{f['flag_value']}\n"
         "[/SECRET_FLAG]\n"
     )
+    return flag_prefix
+
+def _render_full_system_prompt(conn: sqlite3.Connection, phase_id: int, owner_user_id: int) -> str:
+    s = conn.execute(
+        "SELECT prompt_body FROM system_prompts WHERE phase_id = ? AND owner_user_id = ?",
+        (phase_id, owner_user_id),
+    ).fetchone()
+    flag_prefix = render_prefix_system_prompt(conn, phase_id, owner_user_id)
+
     return flag_prefix + (s["prompt_body"] if s else "")
 
+def get_owner_defense_prompt(conn: sqlite3.Connection, phase_id: int, owner_user_id: int) -> str:
+    s = conn.execute(
+        "SELECT prompt_body FROM system_prompts WHERE phase_id = ? AND owner_user_id = ?",
+        (phase_id, owner_user_id),
+    ).fetchone()
+    return s["prompt_body"] if s else ""
 
 def get_owner_flag(conn: sqlite3.Connection, phase_id: int, owner_user_id: int) -> str:
     f = conn.execute(
@@ -174,3 +228,9 @@ def get_owner_flag(conn: sqlite3.Connection, phase_id: int, owner_user_id: int) 
         (phase_id, owner_user_id),
     ).fetchone()
     return f["flag_value"] if f else ""
+
+def get_targets(conn: sqlite3.Connection, exclude_user_id: int):
+    return conn.execute(
+        "SELECT id, username FROM users WHERE is_admin = 0 AND id != ?",
+        (exclude_user_id,),
+    ).fetchall()

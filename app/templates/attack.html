@@ -2,6 +2,11 @@
 {% block content %}
 <h2>Attack</h2>
 <p>Round {{ phase.round_no }} ({{ phase.state }})</p>
+<p>See <a href="/review">review</a> for results of previous attacks.</p>
+
+{% if error %}<p class="err">{{ error }}</p>{% endif %}
+{% if job_id %}<p class="ok">The query has been enqueued successfully (See <a href="/submission/{{ job_id }}">here</a> for details).</p>{% endif %}
+
 <form method="post" action="/attack">
   <label>Target:
     <select name="target_user_id">
@@ -10,11 +15,7 @@
       {% endfor %}
     </select>
   </label><br/>
-  <textarea name="user_prompt" rows="8" cols="100">{{ last_prompt or '' }}</textarea><br/>
+  <textarea name="attack_prompt" rows="8" cols="100">{{ last_prompt or '' }}</textarea><br/>
   <button type="submit">送信</button>
 </form>
-{% if result %}
-  <h3>応答</h3>
-  <pre>{{ result }}</pre>
-{% endif %}
 {% endblock %}

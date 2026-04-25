@@ -12,10 +12,14 @@ from .db import (
     ensure_seed_users,
     get_conn,
     get_current_phase,
+    get_latest_phase,
+    get_targets,
     hash_password,
     init_db,
-    render_full_system_prompt,
+    get_owner_latest_job,
+    get_owner_defense_prompt,
     get_owner_flag,
+    enqueue_llm_job,
     utcnow_iso,
 )
 from .llm import run_chat
@@ -125,7 +129,7 @@ def defense_edit_page(request: Request):
 
 
 @app.post("/defense/edit")
-def defense_edit(request: Request, prompt_body: str = Form(...)):
+def defense_edit(request: Request, prompt_body: str = Form(default="")):
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
@@ -192,14 +196,20 @@ def defense_test_page(request: Request):
         phase = get_current_phase(conn)
         if not phase or phase["state"] != "defense":
             return RedirectResponse("/dashboard", status_code=303)
+        last_defense_prompt = get_owner_defense_prompt(conn, phase["id"], user["id"])
 
     return templates.TemplateResponse(
-        request=request, name="defense_test.html", context={"user": user, "phase": phase, "result": None}
+        request=request,
+        name="defense_test.html",
+        context={
+            "user": user, "phase": phase,
+            "last_defense_prompt": last_defense_prompt,
+        }
     )
 
 
 @app.post("/defense/test", response_class=HTMLResponse)
-def defense_test(request: Request, user_prompt: str = Form(...)):
+def defense_test(request: Request, attack_prompt: str = Form(default=""), defense_prompt: str = Form(default="")):
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
@@ -208,16 +218,64 @@ def defense_test(request: Request, user_prompt: str = Form(...)):
         phase = get_current_phase(conn)
         if not phase or phase["state"] != "defense":
             return RedirectResponse("/dashboard", status_code=303)
+        if len(defense_prompt) > MAX_PROMPT:
+            return templates.TemplateResponse(
+                request=request,
+                name="defense_test.html",
+                context={
+                    "user": user,
+                    "phase": phase,
+                    "last_defense_prompt": defense_prompt,
+                    "last_attack_prompt": attack_prompt,
+                    "error": f"Defense prompt is too long (max {MAX_PROMPT} chars).",
+                },
+            )
+        if len(attack_prompt) == 0:
+            return templates.TemplateResponse(
+                request=request,
+                name="defense_test.html",
+                context={
+                    "user": user,
+                    "phase": phase,
+                    "last_defense_prompt": defense_prompt,
+                    "last_attack_prompt": attack_prompt,
+                    "error": f"Attack prompt cannot be empty.",
+                },
+            )
+        if len(attack_prompt) > MAX_PROMPT:
+            return templates.TemplateResponse(
+                request=request,
+                name="defense_test.html",
+                context={
+                    "user": user,
+                    "phase": phase,
+                    "last_defense_prompt": defense_prompt,
+                    "last_attack_prompt": attack_prompt,
+                    "error": f"Attack prompt is too long (max {MAX_PROMPT} chars).",
+                },
+            )
+        latest_job = get_owner_latest_job(conn, phase["id"], "test", user["id"])
+        if latest_job and latest_job["status"] in ("pending", "running"):
+            return templates.TemplateResponse(
+                request=request,
+                name="defense_test.html",
+                context={
+                    "user": user,
+                    "phase": phase,
+                    "last_defense_prompt": defense_prompt,
+                    "last_attack_prompt": attack_prompt,
+                    "error": f"You have a pending/running job (ID: {latest_job['id']}). Please wait for it to finish before submitting a new test.",
+                },
+            )
 
-        full_system_prompt = render_full_system_prompt(conn, phase["id"], user["id"])
-        response_text = run_chat(full_system_prompt, user_prompt)
-
-        conn.execute(
-            """
-            INSERT INTO defense_tests (phase_id, user_id, user_prompt, response_text, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (phase["id"], user["id"], user_prompt, response_text, utcnow_iso()),
+        job_id = enqueue_llm_job(
+            conn,
+            phase_id=phase["id"],
+            kind="test",
+            defense_user_id=user["id"],
+            attack_user_id=user["id"],
+            defense_prompt=defense_prompt,
+            attack_prompt=attack_prompt,
         )
 
     return templates.TemplateResponse(
@@ -226,8 +284,9 @@ def defense_test(request: Request, user_prompt: str = Form(...)):
         context={
             "user": user,
             "phase": phase,
-            "result": response_text,
-            "last_prompt": user_prompt,
+            "last_defense_prompt": defense_prompt,
+            "last_attack_prompt": attack_prompt,
+            "job_id": job_id,
         },
     )
 
@@ -256,7 +315,7 @@ def attack_page(request: Request):
 
 @app.post("/attack")
 def attack_submit(
-    request: Request, target_user_id: int = Form(...), user_prompt: str = Form(...)
+    request: Request, target_user_id: int = Form(...), attack_prompt: str = Form(default="")
 ):
     user = require_login(request)
     if isinstance(user, RedirectResponse):
@@ -266,22 +325,49 @@ def attack_submit(
         phase = get_current_phase(conn)
         if not phase or phase["state"] != "attack":
             return RedirectResponse("/dashboard", status_code=303)
+        
+        targets = get_targets(conn, user["id"])
+        # validate target user
+        target_user = conn.execute(
+            "SELECT id, username FROM users WHERE id = ? AND is_admin = 0",
+            (target_user_id,),
+        ).fetchone()
+        if not target_user:
+            return templates.TemplateResponse(
+                request=request,
+                name="attack.html",
+                context={
+                    "user": user,
+                    "phase": phase,
+                    "targets": targets,
+                    "last_attack_prompt": attack_prompt,
+                    "error": f"Target not found.",
+                },
+            )
+        if target_user["id"] == user["id"]:
+            return templates.TemplateResponse(
+                request=request,
+                name="attack.html",
+                context={
+                    "user": user,
+                    "phase": phase,
+                    "targets": targets,
+                    "last_attack_prompt": attack_prompt,
+                    "error": f"You cannot attack yourself.",
+                },
+            )
 
-        full_system_prompt = render_full_system_prompt(conn, phase["id"], target_user_id)
-        response_text = run_chat(full_system_prompt, user_prompt)
-
-        conn.execute(
-            """
-            INSERT INTO attacks (phase_id, attacker_user_id, target_user_id, user_prompt, response_text, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (phase["id"], user["id"], target_user_id, user_prompt, response_text, utcnow_iso()),
+        defense_prompt = get_owner_defense_prompt(conn, phase["id"], target_user_id)
+        job_id = enqueue_llm_job(
+            conn,
+            phase_id=phase["id"],
+            kind="attack",
+            defense_user_id=target_user_id,
+            attack_user_id=user["id"],
+            defense_prompt=defense_prompt,
+            attack_prompt=attack_prompt,
         )
 
-        targets = conn.execute(
-            "SELECT id, username FROM users WHERE is_admin = 0 AND id != ? ORDER BY id",
-            (user["id"],),
-        ).fetchall()
 
     return templates.TemplateResponse(
         request=request,
@@ -290,47 +376,137 @@ def attack_submit(
             "user": user,
             "phase": phase,
             "targets": targets,
-            "result": response_text,
-            "last_prompt": user_prompt,
-            "target_user_id": target_user_id,
+            "last_attack_prompt": attack_prompt,
+            "job_id": job_id,
         },
     )
 
 
-@app.get("/review/{phase_id}", response_class=HTMLResponse)
-def review_page(request: Request, phase_id: int):
+@app.get("/review", response_class=HTMLResponse)
+def review_page(request: Request):
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
 
     with get_conn() as conn:
-        phase = conn.execute("SELECT * FROM phases WHERE id = ?", (phase_id,)).fetchone()
-        prompts = conn.execute(
-            """
-            SELECT u.username, s.prompt_body, s.updated_at
-            FROM system_prompts s
-            JOIN users u ON u.id = s.owner_user_id
-            WHERE s.phase_id = ?
-            ORDER BY u.id
-            """,
-            (phase_id,),
-        ).fetchall()
-        attacks = conn.execute(
-            """
-            SELECT a.created_at, au.username AS attacker, tu.username AS target, a.user_prompt, a.response_text
-            FROM attacks a
-            JOIN users au ON au.id = a.attacker_user_id
-            JOIN users tu ON tu.id = a.target_user_id
-            WHERE a.phase_id = ?
-            ORDER BY a.id
-            """,
-            (phase_id,),
-        ).fetchall()
+        phase = get_latest_phase(conn)
+        if not phase:
+            return RedirectResponse("/dashboard", status_code=303)
+        """
+        Take care of visibility.
+        ## Defense phase
+        - Admin: can see all information of test queries (defense prompts, attack prompts, results)
+        - User: can see only their own test queries (defense prompts, attack prompts, results)
+        ## Attack phase
+        - Admin: can see all information of attack queries (defense prompts, attack prompts, results)
+        - User: can see their own attack queries (attack prompts, results)
+        ## Closed phase
+        - Admin: can see all information of test & attack queries (defense prompts, attack prompts, results)
+        - User: can see all information of attack queries (defense prompts, attack prompts, results)
+        """
+        if user["is_admin"]:
+            # Admin can see everything
+            submissions = conn.execute(
+                """
+                SELECT a.id, p.round_no, a.kind, a.created_at, au.username AS attack_user_name, du.username AS defense_user_name, a.status
+                FROM llm_jobs a
+                JOIN phases p ON p.id = a.phase_id
+                JOIN users au ON au.id = a.attack_user_id
+                JOIN users du ON du.id = a.defense_user_id
+                ORDER BY a.id
+                """
+            ).fetchall()
+        else:
+            submissions = conn.execute(
+                """
+                SELECT a.id, p.round_no, a.kind, a.created_at, au.username AS attack_user_name, du.username AS defense_user_name, a.status
+                FROM llm_jobs a
+                JOIN phases p ON p.id = a.phase_id
+                JOIN users au ON au.id = a.attack_user_id
+                JOIN users du ON du.id = a.defense_user_id
+                WHERE ( p.state = 'defense' AND a.kind = 'test' AND a.attack_user_id = ? )
+                    OR ( p.state = 'attack' AND a.kind = 'attack' AND a.attack_user_id = ? )
+                    OR ( p.state = 'closed' AND a.kind = 'attack' )
+                ORDER BY a.id
+                """,
+                (user["id"], user["id"]),
+            ).fetchall()
 
     return templates.TemplateResponse(
         request=request,
         name="review.html",
-        context={"user": user, "phase": phase, "prompts": prompts, "attacks": attacks},
+        context={"user": user, "phase": phase, "submissions": submissions},
+    )
+
+
+@app.get("/submission/{job_id}", response_class=HTMLResponse)
+def review_page(request: Request, job_id: int):
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+
+    with get_conn() as conn:
+        phase = get_latest_phase(conn)
+        if not phase:
+            return RedirectResponse("/dashboard", status_code=303)
+        """
+        Take care of visibility.
+        ## Defense phase
+        - Admin: can see all information of test queries (defense prompts, attack prompts, results)
+        - User: can see only their own test queries (defense prompts, attack prompts, results)
+        ## Attack phase
+        - Admin: can see all information of attack queries (defense prompts, attack prompts, results)
+        - User: can see their own attack queries (attack prompts, results)
+        ## Closed phase
+        - Admin: can see all information of test & attack queries (defense prompts, attack prompts, results)
+        - User: can see all information of attack queries (defense prompts, attack prompts, results)
+        """
+        submission = conn.execute(
+            """
+            SELECT a.id, p.round_no, p.state, a.kind, a.created_at, a.evaluation_started_at, a.evaluation_finished_at,
+                   a.attack_user_id, a.defense_user_id,
+                   au.username AS attack_user_name, du.username AS defense_user_name,
+                   a.defense_prompt, a.attack_prompt,
+                   a.result, a.error, a.status
+            FROM llm_jobs a
+            JOIN phases p ON p.id = a.phase_id
+            JOIN users au ON au.id = a.attack_user_id
+            JOIN users du ON du.id = a.defense_user_id
+            WHERE a.id = ?
+            """, (job_id,)
+        ).fetchone()
+
+    if not submission:
+        return templates.TemplateResponse(
+            request=request,
+            name="submission.html",
+            context={"user": user, "phase": phase, "job_id": job_id, "error": "Submission not found."},
+        )
+    submission = dict(submission)
+    if not user["is_admin"]:
+        pass_check = False
+        if submission["state"] == "defense":
+            if submission["kind"] == "test" and submission["attack_user_id"] == user["id"]:
+                pass_check = True
+        elif submission["state"] == "attack":
+            if submission["kind"] == "attack" and submission["attack_user_id"] == user["id"]:
+                pass_check = True
+                # Hide defense prompt for attack phase users
+                submission["defense_prompt"] = "[Hidden until the phase is closed]"
+        elif submission["state"] == "closed":
+            if submission["kind"] == "attack":
+                pass_check = True
+        if not pass_check:
+            return templates.TemplateResponse(
+                request=request,
+                name="submission.html",
+                context={"user": user, "phase": phase, "job_id": job_id, "error": "You don't have permission to view this submission."},
+            )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="submission.html",
+        context={"user": user, "phase": phase, "job_id": job_id, "submission": submission},
     )
 
 

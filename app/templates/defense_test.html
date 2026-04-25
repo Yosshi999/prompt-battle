@@ -2,12 +2,18 @@
 {% block content %}
 <h2>Defense: テスト</h2>
 <p>Round {{ phase.round_no }} ({{ phase.state }})</p>
+<p>See <a href="/review">review</a> for results of previous tests.</p>
+
+{% if error %}<p class="err">{{ error }}</p>{% endif %}
+{% if job_id %}<p class="ok">The query has been enqueued successfully (See <a href="/submission/{{ job_id }}">here</a> for details).</p>{% endif %}
 <form method="post" action="/defense/test">
-  <textarea name="user_prompt" rows="8" cols="100">{{ last_prompt or '' }}</textarea><br/>
+  <h3>System Prompt (Defense)</h3>
+  <pre>[SECRET_FLAG]
+${FLAG}
+[/SECRET_FLAG]</pre><br/>
+  <textarea name="defense_prompt" rows="14" cols="100">{{ last_defense_prompt or '' }}</textarea><br/>
+  <h3>User Prompt (Attack)</h3>
+  <textarea name="attack_prompt" rows="14" cols="100">{{ last_attack_prompt or '' }}</textarea><br/>
   <button type="submit">テスト実行</button>
 </form>
-{% if result %}
-  <h3>応答</h3>
-  <pre>{{ result }}</pre>
-{% endif %}
 {% endblock %}

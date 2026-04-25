@@ -28,6 +28,8 @@
       {% if user.is_admin %}
         <a href="/admin">Admin</a>
       {% endif %}
+      <a href="/review">Submissions</a>
+      <span class="username">{{ user.username }}</span>
       <form method="post" action="/logout" style="display:inline"><button type="submit">Logout</button></form>
     </nav>
     {% endif %}

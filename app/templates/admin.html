@@ -14,7 +14,7 @@
 <h3>Recent phases</h3>
 <ul>
 {% for p in latest %}
-  <li>Phase {{ p.id }} / Round {{ p.round_no }} / {{ p.state }} - <a href="/review/{{ p.id }}">review</a></li>
+  <li>Phase {{ p.id }} / Round {{ p.round_no }} / {{ p.state }} - <a href="/review">review</a></li>
 {% endfor %}
 </ul>
 {% endblock %}

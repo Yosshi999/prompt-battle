@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Submission: Phase {{ phase.id }} / Round {{ phase.round_no }}</h2>
+<h2>Submission ID: {{ job_id }}</h2>
+{% if error %}<p class="err">{{ error }}</p>
+{% else %}
+  <h3>Attacker: {{ submission.attack_user_name }}</h3>
+  <h3>Target: {{ submission.defense_user_name }}</h3>
+
+  <h3>System Prompt (Defense)</h3>
+  <pre>[SECRET_FLAG]
+${FLAG}
+[/SECRET_FLAG]</pre>
+  <pre>{{ submission.defense_prompt }}</pre>
+
+  <h3>User Prompt (Attack)</h3>
+  <pre>{{ submission.attack_prompt }}</pre>
+
+  <h3>Response: {{ submission.status }}</h3>
+  {% if submission.status == 'done' %}
+    <pre>{{ submission.result }}</pre>
+  {% endif %}
+  {% if submission.status == 'error' %}
+    <pre>{{ submission.error }}</pre>
+  {% endif %}
+{% endif %}
+{% endblock %}

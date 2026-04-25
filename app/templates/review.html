@@ -1,23 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Review: Phase {{ phase.id }} / Round {{ phase.round_no }}</h2>
-<h3>System prompts</h3>
-<ul>
-  {% for p in prompts %}
-  <li><b>{{ p.username }}</b><pre>{{ p.prompt_body }}</pre></li>
-  {% endfor %}
-</ul>
+<h2>Submissions: Phase {{ phase.id }} / Round {{ phase.round_no }}</h2>
 
-<h3>Attacks</h3>
 <table border="1" cellpadding="6">
-  <tr><th>time</th><th>attacker</th><th>target</th><th>prompt</th><th>response</th></tr>
-  {% for a in attacks %}
+  <tr><th>time</th><th>phase</th><th>attacker</th><th>target</th><th>status</th></tr>
+  {% for a in submissions %}
   <tr>
-    <td>{{ a.created_at }}</td>
-    <td>{{ a.attacker }}</td>
-    <td>{{ a.target }}</td>
-    <td><pre>{{ a.user_prompt }}</pre></td>
-    <td><pre>{{ a.response_text }}</pre></td>
+    <td><a href="/submission/{{ a.id }}">{{ a.created_at }}</a></td>
+    <td>{{ a.round_no }}/{{ a.kind }}</td>
+    <td>{{ a.attack_user_name }}</td>
+    <td>{{ a.defense_user_name }}</td>
+    <td>{{ a.status }}</td>
   </tr>
   {% endfor %}
 </table>
