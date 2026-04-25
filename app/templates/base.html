@@ -25,10 +25,11 @@
       {% else %}
         <a role="link" aria-disabled="true" class="disabled">Attack</a>
       {% endif %}
+      <a href="/review">Submissions</a>
       {% if user.is_admin %}
         <a href="/admin">Admin</a>
+        <a href="/admin_users">Admin Users</a>
       {% endif %}
-      <a href="/review">Submissions</a>
       <span class="username">{{ user.username }}</span>
       <form method="post" action="/logout" style="display:inline"><button type="submit">Logout</button></form>
     </nav>

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Admin User Management</h2>
+
+<h3>Flags</h3>
+<table border="1" cellpadding="6">
+  <tr><th>ID</th><th>Username</th><th>Round</th><th>Flag</th></tr>
+  {% for f in flags %}
+  <tr>
+    <td>{{ f.id }}</td>
+    <td>{{ f.username }}</td>
+    <td>{{ f.round_no }}</td>
+    <td>{{ f.flag_value }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h3>Reset Passwords</h3>
+<form method="post" action="/admin_users"><input type="hidden" name="reset" value="-1"><button type="submit">Reset All Passwords</button></form>
+
+<table border="1" cellpadding="6">
+  <tr><th>ID</th><th>Username</th><th>Password</th><th>Action</th></tr>
+  {% for u in users %}
+  <tr>
+    <td>{{ u.id }}</td>
+    <td>{{ u.username }}</td>
+    <td>{{ u.password }}</td>
+    <td>
+      <form method="post" action="/admin_users">
+        <input type="hidden" name="reset" value="{{ u.id }}">
+        <button type="submit">Reset Password</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% endblock %}

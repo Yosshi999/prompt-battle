@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from secrets import token_urlsafe
 
 from .db import (
     create_phase,
@@ -650,3 +651,76 @@ def admin_close_phase(request: Request):
             )
 
     return RedirectResponse("/admin", status_code=303)
+
+@app.get("/admin_users", response_class=HTMLResponse)
+def admin_users_page(request: Request):
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    if not user["is_admin"]:
+        return RedirectResponse("/dashboard", status_code=303)
+
+    with get_conn() as conn:
+        phase = get_current_phase(conn)
+        flags = conn.execute(
+            """
+            SELECT f.id, f.flag_value, u.username, p.round_no
+            FROM flags f
+            JOIN users u ON u.id = f.owner_user_id
+            JOIN phases p ON p.id = f.phase_id
+            ORDER BY f.id
+            """
+        ).fetchall()
+        users = conn.execute("SELECT * FROM users WHERE is_admin = 0").fetchall()
+    if not flags:
+        flags = []
+
+    flags = [dict(f) for f in flags]
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_users.html",
+        context={"user": user, "flags": flags, "phase": phase, "users": users}
+    )
+
+@app.post("/admin_users")
+def admin_reset_password(request: Request, reset: int = Form(...)):
+    user = require_login(request)
+    if isinstance(user, RedirectResponse):
+        return user
+    if not user["is_admin"]:
+        return RedirectResponse("/dashboard", status_code=303)
+
+    with get_conn() as conn:
+        phase = get_current_phase(conn)
+        users = conn.execute("SELECT * FROM users WHERE is_admin = 0").fetchall()
+        users = [dict(u) for u in users]
+        for u in users:
+            if reset == -1 or u["id"] == reset:
+                # random pass
+                new_password = token_urlsafe(16)
+                conn.execute(
+                    "UPDATE users SET password_hash = ? WHERE id = ?",
+                    (hash_password(new_password), u["id"]),
+                )
+                u["password"] = new_password  # Add the new password to the user dict for display
+
+    with get_conn() as conn:
+        flags = conn.execute(
+            """
+            SELECT f.id, f.flag_value, u.username, p.round_no
+            FROM flags f
+            JOIN users u ON u.id = f.owner_user_id
+            JOIN phases p ON p.id = f.phase_id
+            ORDER BY f.id
+            """
+        ).fetchall()
+    if not flags:
+        flags = []
+
+    flags = [dict(f) for f in flags]
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_users.html",
+        context={"user": user, "users": users, "flags": flags, "phase": phase, "reset_event": True}
+    )
+
