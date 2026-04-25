@@ -6,6 +6,9 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from secrets import token_urlsafe
 
+from .loadenv import load_env
+load_env()
+
 DB_PATH = os.getenv("CTF_DB_PATH", "ctf.db")
 
 

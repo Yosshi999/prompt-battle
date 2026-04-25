@@ -22,11 +22,15 @@ from .db import (
     enqueue_llm_job,
     utcnow_iso,
 )
+from .loadenv import load_env
+load_env()
 
 MAX_PROMPT = int(os.getenv("MAX_PROMPT", "1000"))
+RATE_LIMIT = int(os.getenv("RATE_LIMIT", "60"))
+SESSION_SECRET = os.getenv("SESSION_SECRET", "change-this-in-production")
 
 app = FastAPI(title="LLM CTF Attack & Defense")
-app.add_middleware(SessionMiddleware, secret_key="change-this-in-production2")
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
@@ -268,7 +272,7 @@ def defense_test(request: Request, attack_prompt: str = Form(default=""), defens
             )
 
         # rate limit
-        if latest_job and latest_job["created_at"] > utcnow_iso(negative_seconds=60):
+        if latest_job and latest_job["created_at"] > utcnow_iso(negative_seconds=RATE_LIMIT):
             return templates.TemplateResponse(
                 request=request,
                 name="defense_test.html",
@@ -384,7 +388,7 @@ def attack_submit(
                 },
             )
         # rate limit
-        if latest_job and latest_job["created_at"] > utcnow_iso(negative_seconds=60):
+        if latest_job and latest_job["created_at"] > utcnow_iso(negative_seconds=RATE_LIMIT):
             return templates.TemplateResponse(
                 request=request,
                 name="attack.html",
