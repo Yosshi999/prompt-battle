@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TSGCTF: Prompt Battle</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>TSGCTF: Prompt Battle</h1>
+    <small>Do not attack this server!</small>
+    {% if user %}
+    <nav>
+      <a href="/dashboard">Dashboard</a>
+      {% if phase.state == 'defense' %}
+        <a href="/defense/edit">Defense編集</a>
+        <a href="/defense/test">Defenseテスト</a>
+      {% else %}
+        <a role="link" aria-disabled="true" class="disabled">Defense編集</a>
+        <a role="link" aria-disabled="true" class="disabled">Defenseテスト</a>
+      {% endif %}
+      {% if phase.state == 'attack' %}
+        <a href="/attack">Attack</a>
+      {% else %}
+        <a role="link" aria-disabled="true" class="disabled">Attack</a>
+      {% endif %}
+      {% if user.is_admin %}
+        <a href="/admin">Admin</a>
+      {% endif %}
+      <form method="post" action="/logout" style="display:inline"><button type="submit">Logout</button></form>
+    </nav>
+    {% endif %}
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

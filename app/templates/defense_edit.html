@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Defense: System Prompt編集</h2>
+<p>Round {{ phase.round_no }} ({{ phase.state }})</p>
+{% if error %}<p class="err">{{ error }}</p>{% endif %}
+{% if ok %}<p class="ok">{{ ok }}</p>{% endif %}
+<textarea readonly rows="3" cols="100">
+[SECRET_FLAG]
+${FLAG}
+[/SECRET_FLAG]
+</textarea>
+<form method="post" action="/defense/edit">
+  <textarea name="prompt_body" rows="14" cols="100">{{ prompt_body }}</textarea><br/>
+  <button type="submit">保存</button>
+</form>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Admin</h2>
+{% if current %}
+  <p>Current: Round {{ current.round_no }} / {{ current.state }}</p>
+{% else %}
+  <p>Current: none</p>
+{% endif %}
+
+<form method="post" action="/admin/phase/new"><button type="submit">新規フェーズ開始 (defense)</button></form>
+<form method="post" action="/admin/phase/to-attack"><button type="submit">Defense → Attack</button></form>
+<form method="post" action="/admin/phase/close"><button type="submit">フェーズ終了 (close)</button></form>
+
+<h3>Recent phases</h3>
+<ul>
+{% for p in latest %}
+  <li>Phase {{ p.id }} / Round {{ p.round_no }} / {{ p.state }} - <a href="/review/{{ p.id }}">review</a></li>
+{% endfor %}
+</ul>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Dashboard</h2>
+<p>Hello, <b>{{ user.username }}</b>{% if user.is_admin %} (admin){% endif %}</p>
+{% if phase %}
+  <p>現在フェーズ: Round {{ phase.round_no }} / <b>{{ phase.state }}</b></p>
+  <details>
+    <summary>[CONFIDENTIAL] Your flag is:</summary>
+    {{ flag }}
+  </details>
+  {% if phase.state == 'defense' %}
+    <p><a href="/defense/edit">Defenseプロンプト編集へ</a></p>
+  {% elif phase.state == 'attack' %}
+    <p><a href="/attack">Attack画面へ</a></p>
+  {% endif %}
+{% else %}
+  <p>現在進行中のフェーズはありません。</p>
+{% endif %}
+{% endblock %}

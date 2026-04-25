@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Defense: テスト</h2>
+<p>Round {{ phase.round_no }} ({{ phase.state }})</p>
+<form method="post" action="/defense/test">
+  <textarea name="user_prompt" rows="8" cols="100">{{ last_prompt or '' }}</textarea><br/>
+  <button type="submit">テスト実行</button>
+</form>
+{% if result %}
+  <h3>応答</h3>
+  <pre>{{ result }}</pre>
+{% endif %}
+{% endblock %}
