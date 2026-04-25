@@ -3,13 +3,15 @@
 FastAPI + Jinja2 + SQLite で動く、10ユーザー固定のシンプルな CTF 運営用プロトタイプです。
 
 ## Setup
-
+### Web
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
+### LLM Worker
+`python -m app.llm`
 
 ## Demo accounts
 
@@ -29,5 +31,5 @@ uvicorn app.main:app --reload
 ## Notes
 
 - flag はサーバー側固定 prefix として毎 phase ごとにユーザー別再生成されます。
-- 現在の LLM 応答は `app/llm.py` のスタブ実装です。実プロバイダ連携はここを差し替えてください。
+- LLM 応答はDBを参照しサブミット順に評価され、DBを更新します。
 - 本番運用時は secret key / password 管理 / HTTPS / rate limit などを強化してください。
