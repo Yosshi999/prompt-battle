@@ -444,7 +444,9 @@ def review_page(request: Request):
         - User: can see only their own test queries (defense prompts, attack prompts, results)
         ## Attack/Frozen phase
         - Admin: can see all information of attack queries (defense prompts, attack prompts, results)
-        - User: can see their own attack queries (attack prompts, results)
+        - User:
+            - their own attack queries (attack prompts, results)
+            - their own test queries (defense prompts, attack prompts, results)
         ## Closed phase
         - Admin: can see all information of test & attack queries (defense prompts, attack prompts, results)
         - User: can see all information of attack queries (defense prompts, attack prompts, results)
@@ -471,11 +473,13 @@ def review_page(request: Request):
                 JOIN users du ON du.id = a.defense_user_id
                 WHERE ( p.state = 'defense' AND a.kind = 'test' AND a.attack_user_id = ? )
                     OR ( p.state = 'attack' AND a.kind = 'attack' AND a.attack_user_id = ? )
+                        OR ( p.state = 'attack' AND a.kind = 'test' AND a.attack_user_id = ? )
                     OR ( p.state = 'frozen' AND a.kind = 'attack' AND a.attack_user_id = ? )
+                        OR ( p.state = 'frozen' AND a.kind = 'test' AND a.attack_user_id = ? )
                     OR ( p.state = 'closed' AND a.kind = 'attack' )
                 ORDER BY a.id
                 """,
-                (user["id"], user["id"], user["id"]),
+                (user["id"], user["id"], user["id"], user["id"], user["id"]),
             ).fetchall()
 
     return templates.TemplateResponse(
@@ -486,7 +490,7 @@ def review_page(request: Request):
 
 
 @app.get("/submission/{job_id}", response_class=HTMLResponse)
-def review_page(request: Request, job_id: int):
+def submission_page(request: Request, job_id: int):
     user = require_login(request)
     if isinstance(user, RedirectResponse):
         return user
@@ -502,7 +506,9 @@ def review_page(request: Request, job_id: int):
         - User: can see only their own test queries (defense prompts, attack prompts, results)
         ## Attack/Frozen phase
         - Admin: can see all information of attack queries (defense prompts, attack prompts, results)
-        - User: can see their own attack queries (attack prompts, results)
+        - User:
+            - their own attack queries (attack prompts, results)
+            - their own test queries (defense prompts, attack prompts, results)
         ## Closed phase
         - Admin: can see all information of test & attack queries (defense prompts, attack prompts, results)
         - User: can see all information of attack queries (defense prompts, attack prompts, results)
@@ -538,11 +544,15 @@ def review_page(request: Request, job_id: int):
             if submission["kind"] == "test" and submission["attack_user_id"] == user["id"]:
                 pass_check = True
         elif submission["state"] == "attack":
+            if submission["kind"] == "test" and submission["attack_user_id"] == user["id"]:
+                pass_check = True
             if submission["kind"] == "attack" and submission["attack_user_id"] == user["id"]:
                 pass_check = True
                 # Hide defense prompt for attack phase users
                 submission["defense_prompt"] = "[Hidden until the phase is closed]"
         elif submission["state"] == "frozen":
+            if submission["kind"] == "test" and submission["attack_user_id"] == user["id"]:
+                pass_check = True
             if submission["kind"] == "attack" and submission["attack_user_id"] == user["id"]:
                 pass_check = True
                 # Hide defense prompt for frozen phase users
