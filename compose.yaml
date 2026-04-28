@@ -1,0 +1,51 @@
+services:
+        web:
+                restart: always
+                build: ./web
+                read_only: true
+                networks:
+                        - internal
+                tmpfs: /run
+                volumes:
+                        - sqlite:/mnt/shared
+                environment:
+                        - CTF_DB_PATH=/mnt/shared/ctf.db
+                        - ADMIN=tsgadmin
+                        - ADMINPASS=uouofishlifeseimei
+                        - MAX_PROMPT=1000
+                        - RATE_LIMIT=60
+                        - SESSION_SECRET=cookieisverysweet
+                        - USERS=MMA,HybridTheory,Team Enu,KUDoS,Tokyo Westerns,BunkyoWesterns,TeamOne,TPC,Ax4n=B1kRA,full_weak_engineer
+        llm:
+                restart: always
+                build: ./llm
+                read_only: true
+                networks:
+                        - default
+                tmpfs: /run
+                volumes:
+                        - sqlite:/mnt/shared
+                environment:
+                        - CTF_DB_PATH=/mnt/shared/ctf.db
+                        - GROQ_API_KEY=gsk_xxx
+                depends_on:
+                        - web
+        proxy:
+                restart: always
+                image: nginx
+                ports:
+                        - '55676:55676'
+                volumes:
+                        - ./build/nginx.conf:/etc/nginx/nginx.conf:ro
+                networks:
+                        - default
+                        - internal
+                depends_on:
+                        - web
+
+networks:
+        default:
+        internal:
+                internal: true
+volumes:
+        sqlite:

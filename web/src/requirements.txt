@@ -3,4 +3,3 @@ itsdangerous==2.2.0
 Jinja2==3.1.6
 python-multipart==0.0.26
 uvicorn==0.46.0
-groq==1.2.0
